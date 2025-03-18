@@ -1,9 +1,28 @@
-import express, { Request, Response } from 'express';
-import { Router } from 'express';
+import express, { Router, Request, Response } from 'express';
 import bodyParser from 'body-parser';
+import { error } from 'console';
 
 export const videoRouter = Router({});
+type Resolution =
+    | 'P144'
+    | 'P240'
+    | 'P360'
+    | 'P480'
+    | 'P720'
+    | 'P1080'
+    | 'P1440'
+    | 'P2160';
 
+const allowedResolutions: Resolution[] = [
+    'P144',
+    'P240',
+    'P360',
+    'P480',
+    'P720',
+    'P1080',
+    'P1440',
+    'P2160',
+];
 videoRouter.use(bodyParser.json());
 type VideoType = {
     id: number;
@@ -13,7 +32,7 @@ type VideoType = {
     minAgeRestriction: number | null;
     createdAt: string;
     publicationDate: string;
-    availableResolutions: string[];
+    availableResolutions: Resolution[];
 };
 
 type ValidationRule = {
@@ -48,24 +67,105 @@ videoRouter.delete('/:id', (req: Request, res: Response) => {
     res.sendStatus(404);
 });
 
-videoRouter.post('/', (req: Request, res: Response) => {
-    function getNextId() {
-        if (videos.length === 0) return 1;
-        return Math.max(...videos.map((video) => video.id)) + 1;
+videoRouter.delete('/', (req: Request, res: Response) => {
+    try {
+        videos.splice(0, videos.length);
+        res.sendStatus(204);
+    } catch (error) {
+        console.error('Error clearing videos', error);
+        res.status(500).json({
+            error: 'Internal Server Error',
+            message: 'Failed to clear video list',
+        });
     }
-    const newVideo: VideoType = {
-        id: getNextId(),
-        title: req.body.title,
-        author: req.body.author,
-        availableResolutions: ['P144'],
-        canBeDownloaded: true,
-        minAgeRestriction: null,
-        createdAt: new Date().toISOString(),
-        publicationDate: new Date().toISOString(),
-    };
-    videos.push(newVideo);
-    res.status(201).send(newVideo);
-    return;
+});
+
+videoRouter.post('/', (req: Request, res: Response) => {
+    const errors: Array<{ message: string; field: string }> = [];
+
+    const validationRules = [
+        {
+            field: 'title',
+            check: (b: any) =>
+                typeof b.title === 'string' &&
+                b.title.trim().length > 0 &&
+                b.title.length <= 40,
+            message: 'Title must be 1-40 characters',
+        },
+        {
+            field: 'author',
+            check: (b: any) =>
+                typeof b.author === 'string' &&
+                b.author.trim().length > 0 &&
+                b.author.length <= 20,
+            message: 'Author must be 1-20 characters',
+        },
+        {
+            field: 'availableResolutions',
+            check: (b: any) => {
+                if (!b.availableResolutions) return true; // Разрешаем отсутствие поля
+                return (
+                    Array.isArray(b.availableResolutions) &&
+                    b.availableResolutions.every((r: string) =>
+                        [
+                            'P144',
+                            'P240',
+                            'P360',
+                            'P480',
+                            'P720',
+                            'P1080',
+                            'P1440',
+                            'P2160',
+                        ].includes(r)
+                    )
+                );
+            },
+            message: 'Invalid resolutions',
+        },
+    ];
+
+    validationRules.forEach((rule) => {
+        if (!rule.check(req.body)) {
+            errors.push({
+                message: rule.message,
+                field: rule.field,
+            });
+        }
+    });
+
+    if (errors.length > 0) {
+        res.status(400).json({
+            errorsMessages: errors,
+        });
+        return;
+    }
+
+    try {
+        function getNextId() {
+            return videos.length ? Math.max(...videos.map((v) => v.id)) + 1 : 1;
+        }
+
+        const newVideo: VideoType = {
+            id: getNextId(),
+            title: req.body.title,
+            author: req.body.author,
+            availableResolutions: req.body.availableResolutions as Resolution[],
+            canBeDownloaded: true,
+            minAgeRestriction: null,
+            createdAt: new Date().toISOString(),
+            publicationDate: new Date().toISOString(),
+        };
+        videos.push(newVideo);
+        res.status(201).send(newVideo);
+        return;
+    } catch (error) {
+        console.error('Error creating video:', error);
+        res.status(500).json({
+            error: 'Internal Server Error',
+            message: 'Failed to create video',
+        });
+        return;
+    }
 });
 
 videoRouter.put('/:id', (req: Request, res: Response) => {
