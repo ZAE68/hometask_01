@@ -245,4 +245,5 @@ videoRouter.put('/:id', (req: Request, res: Response) => {
     } else {
         res.send(404);
     }
+    console.log('Hello world');
 });
