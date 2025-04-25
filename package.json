@@ -6,9 +6,12 @@
     "scripts": {
         "dev": "nodemon --inspect dist/index.js",
         "watch": "tsc -w",
-        "jest": "jest"
+        "jest": "jest",
+        "build": "tsc",
+        "start": "node dist/index.js"
     },
     "dependencies": {
+        "@types/jest": "^29.5.14",
         "express": "^4.21.2"
     },
     "devDependencies": {
